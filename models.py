@@ -217,25 +217,25 @@ class GraphLSTM_dgl(nn.Module):
         # check the device that the model is running on
         device = next(self.parameters()).device
         self.device = device
-        self.forwardRound.to(self.device)
-        self.backwardRound.to(self.device)
+        self.forwardRound.to(self.device,non_blocking=True)
+        self.backwardRound.to(self.device,non_blocking=True)
         
         # forward round
         start_time = time.time()
-        h1 = torch.zeros((n, self.h_size)).float().to(self.device)
-        c1 = torch.zeros((n, self.h_size)).float().to(self.device)
+        h1 = torch.zeros((n, self.h_size)).float().to(self.device,non_blocking=True)
+        c1 = torch.zeros((n, self.h_size)).float().to(self.device,non_blocking=True)
         g1 = self.forwardRound(g1,h1,c1)
         
         # backward round
-        h2 = torch.zeros((n, self.h_size)).float().to(self.device)
-        c2 = torch.zeros((n, self.h_size)).float().to(self.device)
+        h2 = torch.zeros((n, self.h_size)).float().to(self.device,non_blocking=True)
+        c2 = torch.zeros((n, self.h_size)).float().to(self.device,non_blocking=True)
         g2 = self.backwardRound(g2,h2,c2)
         #end_time = time.time()
         g1_rlist = dgl.unbatch(g1)
         g2_rlist = dgl.unbatch(g2)
         
-        h1_list = torch.zeros((len(g1_list),self.max_node_num,self.h_size)).float().to(self.device)
-        h2_list = torch.zeros((len(g2_list),self.max_node_num,self.h_size)).float().to(self.device)
+        h1_list = torch.zeros((len(g1_list),self.max_node_num,self.h_size)).float().to(self.device,non_blocking=True)
+        h2_list = torch.zeros((len(g2_list),self.max_node_num,self.h_size)).float().to(self.device,non_blocking=True)
         batch_size = len(g1_list)
         for i in range(batch_size):
             nodenum = g1_rlist[i].number_of_nodes()
@@ -322,11 +322,11 @@ class SingleRoundGraphLSTM_pyg(MessagePassing_custom):
         x, edge_index, edge_label, batch = g_data.x, g_data.edge_index, g_data.edge_attr, g_data.batch
         
         n = x.shape[0]
-        h = torch.zeros((n,self.h_size)).to(device)
-        c = torch.zeros((n,self.h_size)).to(device)
-        iou = self.W_iou(x).float().to(self.device)
-        wf_x = self.W_f(x).float().to(self.device)
-        iou_mid = torch.zeros(n,3*self.h_size).to(self.device)
+        h = torch.zeros((n,self.h_size)).to(device,non_blocking=True)
+        c = torch.zeros((n,self.h_size)).to(device,non_blocking=True)
+        iou = self.W_iou(x).float().to(self.device,non_blocking=True)
+        wf_x = self.W_f(x).float().to(self.device,non_blocking=True)
+        iou_mid = torch.zeros(n,3*self.h_size).to(self.device,non_blocking=True)
         out = {"c":c,"iou_mid":iou_mid}
         out = self.update(out,iou,g_order_index[0],h)
         order_num = len(g_order)
@@ -341,7 +341,7 @@ class SingleRoundGraphLSTM_pyg(MessagePassing_custom):
             out = self.propagate('none', edge_index_mask , wf_x=wf_x,iou_x=iou,iou_mid=iou_mid, 
                                 edge_labels=edge_label_mask, h=h,c=c, node_num=n, order_index=g_order_index[i])
         h = out["h"]
-        h_output = torch.zeros((graph_num,self.max_node_num,self.h_size)).float().to(device)
+        h_output = torch.zeros((graph_num,self.max_node_num,self.h_size)).float().to(device,non_blocking=True)
         accu_count = 0
         for i in range(graph_num):
             g_num = len_input[i]
@@ -366,7 +366,7 @@ class SingleRoundGraphLSTM_pyg(MessagePassing_custom):
         h_two_type = torch.cat((h_t0, h_t1), 1) # (num_edges, 2*h_size)
         iou_pre_mid = self.U_iou(h_two_type) # (num_edges, 3*h_size)
         from torch_scatter import scatter_add
-        iou_mid = scatter_add(iou_pre_mid, edge_index[0], 0, iou_mid, node_num, 0)  ## (batch_size, 3*h_size)
+        iou_mid = scatter_add(iou_pre_mid, edge_index[0], 0, iou_mid, node_num)  ## (batch_size, 3*h_size)
         #iou_mid = torch.sum(self.U_iou(h_two_type), 1) # (batch_size, 3 * h_size)
         f_mid = self.U_f(h_two_type) # (num_edges, h_size)
         
@@ -375,7 +375,7 @@ class SingleRoundGraphLSTM_pyg(MessagePassing_custom):
         c_j = torch.clamp(c_j,min=-1e14,max=1e14)
         #f = torch.sigmoid(nodes.data['wf_x'].unsqueeze(1).repeat(1, in_degree, 1) + f_mid + self.b_f)
         f_post_mid = f * c_j
-        c = scatter_add(f_post_mid, edge_index[0], 0, c, node_num, 0)
+        c = scatter_add(f_post_mid, edge_index[0], 0, c, node_num)
         # second term of c
         #c = torch.sum(f * nodes.mailbox['c'], 1) 
         return {'iou_mid': iou_mid,  'c': c}
@@ -488,7 +488,7 @@ class SingleRoundGraphLSTM_pyg_double(MessagePassing_custom):
         iou_pre_mid = self.U_iou(h_two_type) # (num_edges, 3*h_size)
         #from torch_scatter import scatter_mean, scatter_add
         from torch_scatter import scatter_add
-        iou_mid = scatter_add(iou_pre_mid, edge_index[0], 0, iou_mid, node_num, 0)  ## (batch_size, 3*h_size)
+        iou_mid = scatter_add(iou_pre_mid, edge_index[0], 0, iou_mid, node_num)  ## (batch_size, 3*h_size)
         #iou_mid = torch.sum(self.U_iou(h_two_type), 1) # (batch_size, 3 * h_size)
         f_mid = self.U_f(h_two_type) # (num_edges, h_size)
         
@@ -497,7 +497,7 @@ class SingleRoundGraphLSTM_pyg_double(MessagePassing_custom):
         c_j = torch.clamp(c_j,min=-1e14,max=1e14)
         f_post_mid = f * c_j
 
-        c = scatter_add(f_post_mid, edge_index[0], 0, c, node_num, 0)
+        c = scatter_add(f_post_mid, edge_index[0], 0, c, node_num)
         return {'iou_mid': iou_mid,  'c': c}
         
 

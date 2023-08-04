@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 import torch.distributed as dist
 import numpy as np
 import time
-from tensorboard_logger import log_value
+# from tensorboard_logger import log_value
 from metric import *    
 import dgl
 
@@ -48,7 +48,8 @@ class TrainConfig():
         self.test_dataloader = test_dataloader
         self.opt = opt  
 
-     
+
+        
 def calculate_loss(params):
     graph = params["graph"]
     graph_len = len(graph)
@@ -61,6 +62,10 @@ def calculate_loss(params):
     for gnum_1 in range(graph_len):
         len_node = int(len_input[gnum_1])
         loss =loss + criterion_procrustes(y_pred[gnum_1,0:len_node,:],y[gnum_1,0:len_node,:])
+        # reorder = graph[gnum_1]['x_ridx']
+        # edge_list = graph[gnum_1]['ori']['linelist']
+        # loss =loss # + 1/100 * criterion_orthogonality(y_pred[gnum_1,0:len_node,:][reorder,:], edge_list)
+        
     loss = loss / graph_len
 
     return loss
@@ -135,12 +140,15 @@ def construct_prediction(config,graph):
    
             graphlist1.append(g1_data)
             graphlist2.append(g2_data)
-            y_input[gnum,:,:] = g["pos"]
+            # padding for size mismatches
+            destination_array = np.zeros((opt.max_num_node, 2))
+            destination_array[:len(g["pos"]),:] = g["pos"][:len(g["pos"])]
+            y_input[gnum,:,:] = destination_array
             accu_count = accu_count + nodenum
             gnum = gnum + 1
         # Variable and cuda
-        y = torch.from_numpy(y_input).float().to(device)
-        len_input = torch.from_numpy(len_input).long().to(device)
+        y = torch.from_numpy(y_input).float().to(device, non_blocking=True) 
+        len_input = torch.from_numpy(len_input).long().to(device, non_blocking=True) 
 
         ### Use the trained model to predict coordinates
         g1_batch = Batch.from_data_list(graphlist1)#.to(device)
@@ -167,12 +175,14 @@ def construct_prediction(config,graph):
             mask_index = g2_order_mask[i,g2_edge_index[0]]
             mask_index = np.nonzero(mask_index)
             g2_edge_order_mask_list.append(mask_index[0])
-        g1_order = [order.to(device) for order in g1_order]
-        g2_order = [order.to(device) for order in g2_order]
-        g1_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device) for edge_mask in g1_edge_order_mask_list]
-        g2_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device) for edge_mask in g2_edge_order_mask_list]
-        g1_batch = g1_batch.to(device)
-        g2_batch = g2_batch.to(device)
+        g1_order = [order.to(device,non_blocking=True) for order in g1_order]
+        g2_order = [order.to(device,non_blocking=True) for order in g2_order]
+
+        g1_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device,non_blocking=True) for edge_mask in g1_edge_order_mask_list]
+        g2_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device,non_blocking=True) for edge_mask in g2_edge_order_mask_list]
+
+        g1_batch = g1_batch.to(device,non_blocking=True)
+        g2_batch = g2_batch.to(device,non_blocking=True)
         y_pred = model(g1_batch,g1_order,g1_edge_order_mask_list,g2_batch,g2_order,g2_edge_order_mask_list,len_input)
     else: # "BiLSTM"
         device = next(model.parameters()).device # check the device that the model is running on
@@ -184,8 +194,15 @@ def construct_prediction(config,graph):
         for g in graph:
             len_node = g["len"]
             len_input[gnum] = len_node
-            x_input[gnum,:,:] = g["x"]
-            y_input[gnum,:,:] = g["pos"]
+            # padding for size mismatches
+            destination_array_x = np.zeros((opt.max_num_node, input_size))
+            destination_array_x[:len(g["x"]),:] = g["x"]
+            x_input[gnum,:,:] = destination_array_x
+
+            destination_array_y = np.zeros((opt.max_num_node, 2))
+            destination_array_y[:len(g["pos"]),:] = g["pos"]
+            y_input[gnum,:,:] = destination_array_y
+
             gnum = gnum + 1
         y = torch.from_numpy(y_input).float().to(device)
 
@@ -203,6 +220,7 @@ def construct_prediction(config,graph):
 
 ## Test and Evaluate
 def evaluate(config,test_dataloader,valid=False):
+    # device = next(model.parameters()).device # check the device that the model is running on
     with torch.no_grad():
         loss = 0
         start_time = time.time()
@@ -255,6 +273,8 @@ def train_model(model,dataloader,valid_dataloader,test_dataloader,opt):
     step = 0
     batch_len = len(dataloader) 
     
+    # device = next(model.parameters()).device # check the device that the model is running on
+    
     # Training
     for epoch in range(opt.n_epochs):
         epoch_start = time.time()  # timing
@@ -284,12 +304,12 @@ def train_model(model,dataloader,valid_dataloader,test_dataloader,opt):
                 % (epoch, opt.n_epochs, i, batch_len, loss.item(),gradient_norm, duration)
             )
             step = step + 1
-            log_value('training_loss', loss, step)
+            # log_value('training_loss', loss, step)
         epoch_end = time.time()    
         
         # Save Model
         if epoch % opt.save_model_epoch == 0:
-            model_save_path = opt.model_save_folder+'model_' + str(opt.executename) + '_' + str(epoch) + '.pkl'
+            model_save_path = opt.model_save_folder+'model_' + str(opt.executename) + '.pkl'
             print("Epoch duration: " + str(epoch_end-epoch_start) + " Model Save Path:"+model_save_path)
             torch.save(model, model_save_path)
         
@@ -299,13 +319,13 @@ def train_model(model,dataloader,valid_dataloader,test_dataloader,opt):
             "Valid: [Epoch %d/%d] [G valid loss: %f] [Duration: %f]"
             % (epoch, opt.n_epochs, valid_loss, valid_duration)
          )
-        log_value('validation_loss', valid_loss, epoch)  
+        # log_value('validation_loss', valid_loss, epoch)  
         test_loss, test_duration = evaluate(config,test_dataloader,False) 
         print(
             "Test: [Epoch %d/%d] [G test loss: %f] [Duration: %f]"
             % (epoch, opt.n_epochs, test_loss, test_duration)
          )
-        log_value('testing_loss', test_loss, epoch) 
+        # log_value('testing_loss', test_loss, epoch) 
         
 
 
@@ -393,7 +413,7 @@ def train_model_distributed_thread(model,train_dataloader,valid_dataloader,opt, 
         
         # Save Model
         if epoch % opt.save_model_epoch == 0 and rank == 0: # save model only in the first thread
-            model_save_path = opt.model_save_folder+'model_'+str(opt.executename)+'_'+str(epoch)+'.pkl'
+            model_save_path = opt.model_save_folder+'model_'+str(opt.executename)+'.pkl'
             print("Epoch duration:"+str(epoch_end-epoch_start)+"  Model Save Path:"+model_save_path)
             torch.save(model, model_save_path)
 
@@ -415,10 +435,10 @@ def run_one_thread(rank, size, opt):
         if not os.path.exists(opt.model_save_folder):
             os.mkdir(opt.model_save_folder)
         ctime = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        if opt.clean_tensorboard:
-            if os.path.isdir("tensorboard"):
-                shutil.rmtree("tensorboard")
-        configure("tensorboard/"+opt.executename+"_"+ctime, flush_secs=5)
+        # if opt.clean_tensorboard:
+        #     if os.path.isdir("tensorboard"):
+        #         shutil.rmtree("tensorboard")
+        # configure("tensorboard/"+opt.executename+"_"+ctime, flush_secs=5)
     
     # multiple GPUs
     dev_num = torch.cuda.device_count()

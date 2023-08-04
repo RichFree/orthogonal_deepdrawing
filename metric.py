@@ -14,8 +14,45 @@ def orthogonal_procrustes_torch(A, B):
     u, w, vt = torch.svd(input)
     #u, w, vt = torch.svd(torch.transpose(torch.matmul(torch.transpose(B,0,1),A),0,1))
     R = torch.matmul(u,torch.transpose(vt,0,1))
+    # new changes here
+    # quantized to be multiples of pi/2
+    # angle = torch.atan2(R[1,0], R[0,0])
+    # quantized_angle = torch.round(angle / (torch.pi / 2)) * (torch.pi/2)
+    # cos_angle = torch.cos(quantized_angle)
+    # sin_angle = torch.sin(quantized_angle)
+    # R_ortho = torch.tensor([[cos_angle, -sin_angle], [sin_angle, cos_angle]], device=A_device)
+    # new changes end
     scale = torch.sum(w)
     return R, scale
+
+def closest_angle(tensor1, tensor2):
+    # Calculate the angle of the line with respect to the horizontal axis
+    line_angle_radians = torch.atan2(tensor1[0] - tensor2[0], tensor1[1] - tensor2[1])
+
+    # Make sure the angle is within the range [0, 360)
+    line_angle_radians %= (torch.pi/2)
+    
+    # if value is close to pi/2
+    vertical_deviation = abs(line_angle_radians - torch.pi/2)
+    if (vertical_deviation < abs(line_angle_radians)):
+        deviation = vertical_deviation
+    else:
+        deviation = abs(line_angle_radians)
+
+    return deviation
+
+def criterion_orthogonality(data1, edge_list):
+    device = data1.device
+    mtx1 = data1
+
+    deviation_sum = 0
+    for pair in edge_list:
+        # compute angle deviation from horizontal line
+        deviation_sum += closest_angle(mtx1[pair[0]], mtx1[pair[1]])
+
+    # return normalized deviation angle in radians
+    return deviation_sum / len(edge_list)
+
 
 def criterion_procrustes(data1, data2):
     device = data1.device

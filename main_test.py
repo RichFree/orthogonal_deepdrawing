@@ -5,17 +5,13 @@ warnings.filterwarnings("ignore")
 
 ### Initialize
 opt = Args()
-opt.set_graphtype('pivotMds_grid')
+# opt.set_graphtype('pivotMds_grid')
+opt.set_graphtype('ortho') # options: 'grid_v1', 'grid_v2', 'pivotMds_grid'
 #opt.scale = 400
 print(opt.__dict__)  
 
 ### Modify the epoch number to the suitable value
-epoch=1500
-# model_execute = "ModelName_DatasetName_TrialID"
-# model_execute = "GraphLSTM_pyg-grid_v2-demo1"
-model_execute = "GraphLSTM_pyg-pivotMds_grid-demo1"
-
-model_name = 'model_'+model_execute+'_'+str(epoch)+'.pkl'
+model_name = "model_GraphLSTM_pyg-ortho_permute.pkl"
 model_file = opt.main_data_folder + 'model_save/' + model_name
 opt.DGL_input = False # Set this value as True, if the trained model is GraphLSTM_dgl; Otherwise, set it as False.
 opt.PYG_input = True  # Set this value as False, if the trained model is GraphLSTM_pyg; Otherwise, set it as False.
@@ -51,7 +47,7 @@ graph_dataset,valid_graph_dataset,test_graph_dataset = getdataset(opt)
 
 ## Begin test samples from test dataset
 model_testdataset_inference_params = {
-    "max_samples":24,
+    "max_samples":5,
     "dataset":test_graph_dataset,
 
     "test_params":{

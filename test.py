@@ -75,6 +75,8 @@ def model_test(testconfig):
     DGL_input = opt.DGL_input 
     PYG_input = opt.PYG_input
 
+
+
     model.eval()
     if cpu_mode == True:
         model.cpu()
@@ -100,20 +102,20 @@ def model_test(testconfig):
             len_input[gnum] = len_node
             nodenum = g["len"]
             g1 = g["g1"]
-            g1_x = Variable(torch.from_numpy(g["x"][0:nodenum,:])).float().to(device)
+            g1_x = Variable(torch.from_numpy(g["x"][0:nodenum,:])).float().to(device,non_blocking=True)
             g1.ndata["x"] =g1_x
-            g1.edata['edge_label'] = g1.edata['edge_label'].to(device)
+            g1.edata['edge_label'] = g1.edata['edge_label'].to(device,non_blocking=True)
             g2 = g["g2"]
-            g2_x = Variable(torch.from_numpy(g["x"][0:nodenum,:])).float().to(device)
+            g2_x = Variable(torch.from_numpy(g["x"][0:nodenum,:])).float().to(device,non_blocking=True)
             g2.ndata["x"] = g2_x
-            g2.edata['edge_label'] = g2.edata['edge_label'].to(device)
+            g2.edata['edge_label'] = g2.edata['edge_label'].to(device,non_blocking=True)
             ###
             graphlist1.append(g1)
             graphlist2.append(g2)
             y_input[gnum,:,:] = g["pos"]
             gnum = gnum + 1
         ### Variable and cuda
-        y = torch.from_numpy(y_input).float().to(device)
+        y = torch.from_numpy(y_input).float().to(device,non_blocking=True)
         ### Use model to predict coordinates
         start_time =time.time()
         y_pred = model(graphlist1,graphlist2)
@@ -140,22 +142,26 @@ def model_test(testconfig):
 
             g2_edge_index = torch.from_numpy(g["g2_edge_index"]).long()
             g2_edge_label = torch.from_numpy(g["g2_edge_label"]).float()
-            g1_data = Data(x=g_x,edge_index=g1_edge_index,edge_attr=g1_edge_label)#.to(device)
-            g2_data = Data(x=g_x,edge_index=g2_edge_index,edge_attr=g2_edge_label)#.to(device)
+            g1_data = Data(x=g_x,edge_index=g1_edge_index,edge_attr=g1_edge_label)#.to(device,non_blocking=True)
+            g2_data = Data(x=g_x,edge_index=g2_edge_index,edge_attr=g2_edge_label)#.to(device,non_blocking=True)
             graphlist1_dgl.append(g["g1"])
             graphlist2_dgl.append(g["g2"])
             ###
             graphlist1.append(g1_data)
             graphlist2.append(g2_data)
-            y_input[gnum,:,:] = g["pos"]
+            # padding for size mismatches
+            destination_array = np.zeros((opt.max_num_node, 2))
+            destination_array[:len(g["pos"]),:] = g["pos"][:len(g["pos"])]
+            y_input[gnum,:,:] = destination_array
+
             accu_count = accu_count + nodenum
             gnum = gnum + 1
         ### Variable and cuda
-        y = torch.from_numpy(y_input).float().to(device)
-        len_input = torch.from_numpy(len_input).long().to(device)
+        y = torch.from_numpy(y_input).float().to(device,non_blocking=True)
+        len_input = torch.from_numpy(len_input).long().to(device,non_blocking=True)
         ### Use model to predict coordinates
-        g1_batch = Batch.from_data_list(graphlist1)#.to(device)
-        g2_batch = Batch.from_data_list(graphlist2)#.to(device)
+        g1_batch = Batch.from_data_list(graphlist1)#.to(device,non_blocking=True)
+        g2_batch = Batch.from_data_list(graphlist2)#.to(device,non_blocking=True)
         g1_dgl_batch = dgl.batch(graphlist1_dgl)
         g2_dgl_batch = dgl.batch(graphlist2_dgl)
         g1_order = dgl.topological_nodes_generator(g1_dgl_batch)
@@ -178,12 +184,12 @@ def model_test(testconfig):
             mask_index = g2_order_mask[i,g2_edge_index[0]]
             mask_index = np.nonzero(mask_index)
             g2_edge_order_mask_list.append(mask_index[0])
-        g1_order = [order.to(device) for order in g1_order]
-        g2_order = [order.to(device) for order in g2_order]
-        g1_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device) for edge_mask in g1_edge_order_mask_list]
-        g2_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device) for edge_mask in g2_edge_order_mask_list]
-        g1_batch = g1_batch.to(device)
-        g2_batch = g2_batch.to(device)
+        g1_order = [order.to(device,non_blocking=True) for order in g1_order]
+        g2_order = [order.to(device,non_blocking=True) for order in g2_order]
+        g1_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device,non_blocking=True) for edge_mask in g1_edge_order_mask_list]
+        g2_edge_order_mask_list = [torch.from_numpy(edge_mask).long().to(device,non_blocking=True) for edge_mask in g2_edge_order_mask_list]
+        g1_batch = g1_batch.to(device,non_blocking=True)
+        g2_batch = g2_batch.to(device,non_blocking=True)
         start_time =time.time()
         y_pred = model(g1_batch,g1_order,g1_edge_order_mask_list,g2_batch,g2_order,g2_edge_order_mask_list,len_input)
         duration = time.time() - start_time
@@ -195,15 +201,22 @@ def model_test(testconfig):
         for g in graph:
             len_node = g["len"]
             len_input[gnum] = len_node
-            x_input[gnum,:,:] = g["x"]
-            y_input[gnum,:,:] = g["pos"]
+            # padding for size mismatches
+            destination_array_x = np.zeros((opt.max_num_node, opt.max_prev_node))
+            destination_array_x[:len(g["x"]),:] = g["x"]
+            x_input[gnum,:,:] = destination_array_x
+
+            destination_array_y = np.zeros((opt.max_num_node, 2))
+            destination_array_y[:len(g["pos"]),:] = g["pos"]
+            y_input[gnum,:,:] = destination_array_y
+
             gnum = gnum + 1
         ### Variable and cuda
-        y = torch.from_numpy(y_input).float().to(device)
+        y = torch.from_numpy(y_input).float().to(device,non_blocking=True)
 
 
         x = torch.from_numpy(x_input).float()
-        x = Variable(x).to(device)
+        x = Variable(x).to(device,non_blocking=True)
         ### Use model to predict coordinates
         start_time = time.time()
         y_pred = model(x)
@@ -215,7 +228,9 @@ def model_test(testconfig):
     y_pred = y_pred.reshape(opt.max_num_node,2)
     y_selected = y[0:len_node,:]
     y_selected_pred = y_pred[0:len_node,:]
+    
     y_selected = y_selected[g["x_ridx"],:]
+
     y_selected_pred = y_selected_pred[g["x_ridx"],:]
     
     y_selected = y_selected.data.cpu().numpy()
@@ -223,7 +238,12 @@ def model_test(testconfig):
     ori = graph[0]["ori"]
     width = ori["width"]
     height = ori["height"]
-    bounding_box = g["bounding_box"]
+    # bounding_box = g["bounding_box"]
+    bounding_box = {}
+    bounding_box['left'] = 0
+    bounding_box['right'] = 300
+    bounding_box['top'] = 0
+    bounding_box['bottom'] = 300
     scale = opt.scale
     
     if PA_corrected:
@@ -239,8 +259,8 @@ def model_test(testconfig):
     pos_pred = np.array(pos_pred)
 
     if Scale_corrected == True:
-        pos_ori, real_scale_cof = transform_pos(pos_ori,100,100,800,800)
-        pos_pred,_ = transform_pos(pos_pred,100,100,900,900,real_scale_cof)
+        pos_ori, real_scale_cof = transform_pos(pos_ori,100,100,700,700)
+        pos_pred,_ = transform_pos(pos_pred,100,100,700,700,real_scale_cof)
     
     ## Visualize the results.
     visualize_time = time.time()

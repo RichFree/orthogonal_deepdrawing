@@ -1,8 +1,18 @@
 # data folder
 main_data_folder/data
 main_data_folder/model_save
+main_data_folder/model_archive
+main_data_folder/orthogonal
+main_data_folder/results_archive
 main_data_folder/testing_results
+main_data_folder/.ipynb_checkpoints
 tensorboard/*
+.ipynb_checkpoints/
+.test.png
+.test.xml
+.vscode/
+test.png
+test.xml
 
 __pycache__
 __pycache__/

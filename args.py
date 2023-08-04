@@ -9,8 +9,8 @@ class Args():
         self.main_data_folder = "./main_data_folder/"
         ##################################################################################
         ## Model Parameters
-        self.hidden_size = 256   
-        self.num_layers = 4 
+        self.hidden_size = 512
+        self.num_layers = 6
         
         ## The number of distributed threads used, if we use torch.nn.distributed to speed up the training
         self.distributed_thread_size = 8 # the number of threads/GPUs used
@@ -32,7 +32,7 @@ class Args():
             self.PYG_input = True
         #############################################################################################
         ## Training Process Basic Configuration ( can be manually set )
-        self.n_epochs = 1600 # 4000
+        self.n_epochs = 1000 # 1600
         self.lr = 0.0015 # 0.001 , for Adam optimizer
         self.milestones = [50,100]  # for multistepLR
         self.lr_rate = 0.3  # for multistepLR
@@ -51,9 +51,9 @@ class Args():
         def collate_fn(batch):
             return batch
         self.collate_fn = collate_fn
-        self.batch_size = 4
+        self.batch_size = 1
         self.num_workers = 0
-        self.dist_train_num_workers = 2 # the number of workers for the distributed training dataloader
+        self.dist_train_num_workers = 1 # the number of workers for the distributed training dataloader
         
         #############################################################################################
         ## Training Process
@@ -68,7 +68,7 @@ class Args():
         self.model_save_folder = self.main_data_folder + "model_save/"
         
         ### Init Graph Type
-        self.set_graphtype('grid_v1')
+        self.set_graphtype('ortho')
         
         
     def set_graphtype(self,graph_type):
@@ -101,6 +101,14 @@ class Args():
             self.scale = 784.0
             self.feature_size = 1
             self.max_num_edge = 1104
+        elif self.graph_type == 'ortho':
+            self.setPath(path_params)
+            self.max_num_node = 576
+            self.max_prev_node = 49
+            self.scale = 784.0
+            self.feature_size = 1
+            self.max_num_edge = 1104
+
         else:
             print("error in graph type : "+self.graph_type)
     def getDefaultPath(self,graph_type,data_path):

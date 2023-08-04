@@ -1,0 +1,5 @@
+/home/richard/Projects/06_research/deepdrawing/graph_generation/step1/graphn100e300s150i0planar.gml
+/home/richard/Projects/06_research/deepdrawing/graph_generation/step1/graphn10e30s150i0planar.gml
+/home/richard/Projects/06_research/deepdrawing/graph_generation/step1/graphn25e75s150i0planar.gml
+/home/richard/Projects/06_research/deepdrawing/graph_generation/step1/graphn50e150s150i0planar.gml
+/home/richard/Projects/06_research/deepdrawing/graph_generation/step1/graphn75e225s150i0planar.gml

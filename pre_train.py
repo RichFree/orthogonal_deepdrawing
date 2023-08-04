@@ -10,7 +10,7 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from torch.multiprocessing import Process
 from torch.utils.data import Dataset, DataLoader
-from tensorboard_logger import configure, log_value
+# from tensorboard_logger import configure, log_value
 
 from data import *
 from models import *
@@ -33,10 +33,10 @@ def precheck(opt):
     if not os.path.exists(opt.model_save_folder):
         os.mkdir(opt.model_save_folder)
     ctime = strftime("%Y-%m-%d %H:%M:%S", localtime()) # local time
-    if opt.clean_tensorboard:
-        if os.path.isdir("tensorboard"):
-            shutil.rmtree("tensorboard")
-    configure("tensorboard/"+opt.executename+"_"+ctime, flush_secs=5)
+    # if opt.clean_tensorboard:
+    #     if os.path.isdir("tensorboard"):
+    #         shutil.rmtree("tensorboard")
+    # configure("tensorboard/"+opt.executename+"_"+ctime, flush_secs=5)
     random.seed(123) 
 
 def getdataloader(opt):
@@ -47,6 +47,7 @@ def getdataloader(opt):
             valid_graph_dataset = Graph_sequence_from_file(dataset_file=opt.target_valid_dataset_file_folder)
             test_graph_dataset = Graph_sequence_from_file(dataset_file=opt.target_test_dataset_file_folder)
         else:
+            # assert opt.target_train_dataset_file_folder == "pivotMds_grid_test_dataset_folder_preprocess", opt.target_train_dataset_file_folder
             graph_dataset = Graph_sequence_from_file_pyg(dataset_file=opt.target_train_dataset_file_folder)
             valid_graph_dataset = Graph_sequence_from_file_pyg(dataset_file=opt.target_valid_dataset_file_folder)
             test_graph_dataset = Graph_sequence_from_file_pyg(dataset_file=opt.target_test_dataset_file_folder)
@@ -55,10 +56,12 @@ def getdataloader(opt):
         valid_graph_dataset = Graph_sequence_from_file_dgl(dataset_file=opt.target_valid_dataset_file_folder)
         test_graph_dataset = Graph_sequence_from_file_dgl(dataset_file=opt.target_test_dataset_file_folder)
         
-    dataloader = DataLoader(graph_dataset, batch_size=opt.batch_size,
-                            shuffle=True, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
-    valid_dataloader = DataLoader(valid_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
-    test_dataloader = DataLoader(test_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
+    dataloader = DataLoader(graph_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers, collate_fn=opt.collate_fn, pin_memory=False)
+    valid_dataloader = DataLoader(valid_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn, pin_memory=False)
+    test_dataloader = DataLoader(test_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn, pin_memory=False)
+    #dataloader = DataLoader(graph_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
+    #valid_dataloader = DataLoader(valid_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
+    #test_dataloader = DataLoader(test_graph_dataset, batch_size=opt.batch_size, num_workers=opt.num_workers, collate_fn=opt.collate_fn)
     num_train = len(graph_dataset)
     num_valid = len(valid_graph_dataset)
     num_test = len(test_graph_dataset)
@@ -74,15 +77,17 @@ def getmodel(opt):
     num_layers = opt.num_layers # Only for "BiLSTM"
     output_size = 2
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # Model Initialize
     if opt.model_select == "GraphLSTM_pyg": # The proposed model implemented with PyG Library: we used this for evaluation
         model = GraphLSTM_pyg(x_size=input_size,h_size=hidden_size,output_size=output_size,
-                               max_node_num=opt.max_num_node).cuda()
+                               max_node_num=opt.max_num_node).to(device)
     elif opt.model_select == "GraphLSTM_dgl":   # The proposed model implemented with DGL library
         model = GraphLSTM_dgl(x_size=input_size,h_size=hidden_size,output_size=output_size,
-                               max_node_num=opt.max_num_node).cuda()
+                               max_node_num=opt.max_num_node).to(device)
     elif opt.model_select == "BiLSTM":  # The baseline model
-        model = BiLSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,num_classes=output_size).cuda()
+        model = BiLSTM(input_size=input_size,hidden_size=hidden_size,num_layers=num_layers,num_classes=output_size).to(device)
     print(model)
     print("Params: %d" %calculateParamsNum(model))
     return model
