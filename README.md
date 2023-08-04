@@ -71,6 +71,8 @@ The arguments are:
 $ ./make_graphs [number of nodes] [max number of edges] [number of graphs to generate] [seed] [is planar?] [output folder]
 ```
 
+This program was taken from the [pc-tree](https://github.com/N-Coder/pc-tree/) repo. It requires a local installation of OGDF to compile.
+
 The number of edges is set to 3x of number of nodes due to Euler's formula (3\*nodes - 6). For convenience, (3\* number of nodes) is used as the program will correct it to the correct number. [useful reference](https://mathoverflow.net/questions/124116/maximum-number-of-edges-in-a-planar-graph)
 
 ## Train Model
