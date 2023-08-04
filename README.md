@@ -1,14 +1,11 @@
-# DeepDrawing: A Deep Learning Approach to Graph Drawing
+# Orthogonal DeepDrawing
 
-<img src="./figs/deepDrawing-example.png" width="500">
+## What is this
 
-## Introduction
-This is the code repository for our IEEE VIS19 Paper entitled "DeepDrawing: A Deep Learning Approach to Graph Drawing". We propose a deep learning based approach to learn from existing graph drawings of a similar drawing style. Then, given a new graph, the trained model directly predict the layout (i.e., the coordinates of the nodes) of a drawing style similar to the training dataset.
-
-You can also check our [project webpage](http://yong-wang.org/proj/deepDrawing.html) for more details.
+This is a fork of the original [DeepDrawing](https://github.com/jiayouwyhit/deepdrawing). This repo attempts to test if the model can be applied to orthogonal graphs. Please refer to the original [project webpage](http://yong-wang.org/proj/deepDrawing.html) for the original paper.
 
 ## Citation
-If you find our work useful in your research, please consider citing:
+If you find the original authors' work useful in your research, please consider citing:
 ```
 @ARTICLE{wang19deepdrawing, 
   author  = {Wang, Yong and Jin, Zhihua and Wang, Qianwen and Cui, Weiwei and Ma, Tengfei and Qu, Huamin},
@@ -21,79 +18,116 @@ If you find our work useful in your research, please consider citing:
 }
 ```
 
-## Installation
+## Required Packages
 
+For graph generation:
 
+- pygmlparser (pip only)
+- pandas
+- numpy
 
+For DeepDrawing:
 
-### Download the code
-You can simply download the code by using github:
+- pytorch-geometric 
+- pytorch-sparse
+- pytorch-cluster
+- pytorch-scatter
+- pytorch-spline-conv
+- pytorch
+- dgl
+- cairosvg
+- cudatoolkit (if Nvidia GPU is needed)
+
+## Constructing Datasets
+
 ```
-$ git clone https://github.com/jiayouwyhit/deepdrawing.git
+$ cd graph_generation
+$ conda activate <env>
+$ bash auto_make_pkl.sh
 ```
 
-### Prerequisites
-Install [Conda](https://docs.conda.io/en/latest/) on your computer. Then run the following command to install all the dependencies:
+`auto_make_pkl.sh` produces 5 graphs of different nodes. The same data is used for
+train/test/valid sets to study memorization properties of the model.
+
+To test generalizability, independent train/test/valid splits can be created with:
+
 ```
-$ conda env create --name deepdrawing --file=./config/env.yml
+$ cd graph_generation
+$ conda activate <env>
+$ bash auto_make_pkl_independent.sh
 ```
-Enter the corresponding conda environment:
+
+### Modifying auto_make_pkl.sh
+
+From `auto_make_pkl.sh`, an example of how to use `make_graphs` is:
+
 ```
-$ conda activate deepdrawing
+$ ./make_graphs 10 30 1 150 1 step1
 ```
-All the following command will be executed in this environment.
 
-Note that it may be a bit tricky to successfully install PyTorch geometric (PyG). Here we list the package versions where we successfully install it by using the above conda installation command.
+The arguments are:
 
-- OS: Ubuntu (16.04.5 LTS (Xenial Xerus))
-- gcc:5.4.0
-- cuda: 9.0
-- python: 3.6.8
-- torch: 1.0.0
-- torch-scatter: 1.1.2
-- torch-sparse: 0.2.4
-- torch-cluster: 1.2.4
-- torch-spline-conv: 1.0.6
-- torch-geometric: 1.0.3
-
-We tested the case where gcc version == 7.4.0, but failed to successfully install the dependencies of torch-geometric. So we would advise readers to use the above package versions in order to successfully build the environment. For other issues of installing torch-scatter, torch-sparse, torch-cluster and torch-spline-conv, please refer to [the official installation guidelines of PyG](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
-
-### Launch
-
-#### Model Training
-For demo purpose, please download the grid dataset from [this link](https://drive.google.com/drive/folders/1LjxuVp_eIA3Z0CT7ctFr-U3tmakVj2aR?usp=sharing) and put all the corresponding data folders to the folder ``main_data_folder/data''.
-
-Then go to the main folder and run 
 ```
+$ ./make_graphs [number of nodes] [max number of edges] [number of graphs to generate] [seed] [is planar?] [output folder]
+```
+
+The number of edges is set to 3x of number of nodes due to Euler's formula (3\*nodes - 6). For convenience, (3\* number of nodes) is used as the program will correct it to the correct number. [useful reference](https://mathoverflow.net/questions/124116/maximum-number-of-edges-in-a-planar-graph)
+
+## Train Model
+
+In order to train the model
+
+```
+$ conda activate <env>
 $ python main_train.py
 ```
-Then the terminal will print out the model information and the corresponding training epochs. You may also use the following command to track the training progress:
+
+The model is saved to `main_data_folder/model_save` for every 10 epochs.
+
+Settings for the model (model parameters, model save location, batch size, etc.)
+can be changed in `args.py`.
+
+## Test the Model
+
+To test the model, just run:
+
 ```
-$ tensorboard --logdir=./tensorboard  --port=6007
-```
-
-
-If you open your browser (http://localhost:6007), you will be able to see the loss plots like this:
-
-<!-- <img src="./figs/training-loss.png" width="400"> -->
-<img src="./figs/training.png" width="400"> \
-<img src="./figs/validation.png" width="400"> \
-<img src="./figs/testing.png" width="400">
-
-
-In this repository, we implemented the GraphLSTM model with two different libraries: [PyG](https://github.com/rusty1s/pytorch_geometric) and [DGL](https://docs.dgl.ai/tutorials/models/index.html). According to our observation, the PyG-based implementation is faster than the DGL-based implementation. You can change the configurations in the file ``main_train.py''.
-
-#### Model Testing
-The trained model will be saved in the folder ``main_data_folder/model_save''. You may select the appropriate model and change the configurations in the file ``main_test.py''. We have also put a file of the trained model in the [this link](https://drive.google.com/drive/folders/1LjxuVp_eIA3Z0CT7ctFr-U3tmakVj2aR?usp=sharing). You may put it to ``main_data_folder/model_save'' to run a quick demo. 
-
-Use the followinig command to check the testing result:
-```
+$ conda activate <env>
 $ python main_test.py
 ```
-The visualization results can be found in the folder "main_data_folder/testing_results".
+
+The generated results will be found in `main_data_folder/testing_results/test_random/`
+
+Additional settings can be set in `main_test.py`.
+
+### Use pretrained model
+A pretrained model for data generated from `auto_make_pkl.sh` is in the `main_data_folder/model_save/` folder named `model_GraphLSTM_pyg-ortho_permute_pretrained.pkl`
+
+To use the pretrained model, just copy it to the name used by `main_train.py`
+
+```
+$ cd main_data_folder/model_save/
+$ cp model_GraphLSTM_pyg-ortho_permute_pretrained.pkl model_GraphLSTM_pyg-ortho_permute.pkl
+```
 
 ## Data
-Here we use the grid dataset as an example to show how the data look like. Basically, all the data will follow the following format:
+The data is in a Python pkl format. It contains key graph attributes. The code
+to generate the pkl file can be found in `graph_generation/json_to_pkl.py`.
+
+Some additional insights into the data not covered in the original repo:
+
+- The input feature `x` is a generated sequence of features that is almost like a one-hot encoding scheme. 
+- The sorted order that `x_idx` and `x_ridx` refers to are the BFS sorted order
+  of the graph
+    - It is ambiguous where is the starting node, so I used the node with the
+      highest between-ness centrality
+- Attributes like `adj` and `graph` can be generated using networkx. In fact
+  networkx is key to generating many of the attributes in the table.
+- The idea behind the pre-processing of OGDF outputs lies in generating new
+  nodes in networkx that represents the bend-nodes. This allows the model to
+  learn where to introduce bends in the edges.
+
+
 ```
 {
   // Core Attribute
@@ -132,5 +166,9 @@ Here we use the grid dataset as an example to show how the data look like. Basic
 }
 ```
 
-## Note
-The code in this repository is under active development. Also, the current approach is only tested on graphs of a small number of nodes.
+## Caveats
+
+The model cannot really generalize beyond what it is trained on. The reason is that we are overfitting on the structure of the bend nodes. 
+
+Despite the shortcomings, it is interesting to note that the model can be used to
+memorize different graph layouts.
